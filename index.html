@@ -3147,6 +3147,9 @@ async function sendOrc(){
 let chatStoreAdded = false;
 
 function openChat(id) {
+  // Unsubscribe from previous chat
+  if(window._chatSub){ window._chatSub.unsubscribe(); window._chatSub=null; }
+
   currentChat = id;
   chatStoreAdded = false;
   const conv = chatData[id];
@@ -3171,7 +3174,6 @@ function openChat(id) {
   document.getElementById('chat-header-name').textContent = conv.name;
   document.getElementById('chat-header-sub').textContent = conv.sub;
 
-  // Participants chips
   const partRow = document.getElementById('participant-row');
   if(conv.type==='3way'){
     partRow.style.display='flex';
@@ -3186,19 +3188,71 @@ function openChat(id) {
     partRow.style.display='none';
   }
 
-  // Invite bar for direct chats
   const invBar = document.getElementById('invite-store-bar');
   invBar.style.display = (conv.type==='direct') ? 'flex' : 'none';
 
-  // Render messages
+  // Render local mock messages first (immediate feedback)
   renderMessages(conv.messages);
-
   showScreen('chatconv');
-  // Scroll to bottom
-  setTimeout(()=>{
-    const area=document.getElementById('msgs-area');
-    area.scrollTop=area.scrollHeight;
-  },100);
+  setTimeout(()=>{ const area=document.getElementById('msgs-area'); area.scrollTop=area.scrollHeight; },100);
+
+  // Load real messages from Supabase + subscribe Realtime
+  const topic = 'chat:' + id;
+  (async () => {
+    const sb = getSupabase();
+    const { data:{ session } } = await sb.auth.getSession();
+    if(!session) return;
+
+    // Load history
+    const { data: msgs, error } = await sb.from('messages')
+      .select('id, sender_id, content, created_at, topic')
+      .eq('topic', topic)
+      .order('created_at', { ascending: true })
+      .limit(50);
+
+    if(!error && msgs && msgs.length > 0){
+      const myId = session.user.id;
+      const now = new Date();
+      const realMsgs = msgs.map(m => {
+        const t = new Date(m.created_at);
+        const time = t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes();
+        return {
+          from: m.sender_id === myId ? 'me' : 'other',
+          text: m.content,
+          time,
+          sender: conv.participants[0] ? conv.participants[0].name : 'Pintor',
+          img: conv.participants[0] ? conv.participants[0].img : ''
+        };
+      });
+      renderMessages(realMsgs);
+      const area=document.getElementById('msgs-area');
+      area.scrollTop=area.scrollHeight;
+    }
+
+    // Subscribe Realtime
+    const sub = sb.channel(topic)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: 'topic=eq.' + topic
+      }, payload => {
+        const m = payload.new;
+        const { data:{ session: s } } = sb.auth.getSession().then(({data:{session:s}}) => {
+          const myId = s ? s.user.id : null;
+          const isMe = m.sender_id === myId;
+          appendMsg({
+            from: isMe ? 'me' : 'other',
+            text: m.content,
+            time: new Date(m.created_at).getHours()+':'+(new Date(m.created_at).getMinutes()<10?'0':'')+ new Date(m.created_at).getMinutes(),
+            sender: isMe ? 'Você' : (conv.participants[0] ? conv.participants[0].name : 'Pintor'),
+            img: isMe ? '' : (conv.participants[0] ? conv.participants[0].img : '')
+          });
+        });
+      })
+      .subscribe();
+    window._chatSub = sub;
+  })();
 }
 
 function renderMessages(msgs){
@@ -3255,31 +3309,46 @@ function renderMessages(msgs){
   }).join('');
 }
 
-function sendMsg(){
+async function sendMsg(){
   const input = document.getElementById('chat-input');
   const txt = input.value.trim();
   if(!txt) return;
   input.value='';
-  const conv = chatData[currentChat];
+
+  const topic = 'chat:' + currentChat;
   const now = new Date();
   const time = now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
-  conv.messages.push({from:'me',text:txt,time});
-  renderMessages(conv.messages);
-  const area=document.getElementById('msgs-area');
-  area.scrollTop=area.scrollHeight;
 
-  // Auto-reply after 1.2s
-  setTimeout(()=>{
-    const replies={
-      '3way-carlos':[{from:'carlos',img:'https://i.pravatar.cc/150?img=11',sender:'Carlos',text:'Perfeito! Já anotei. Combinamos na visita técnica.',time}],
-      'direct-joao':[{from:'joao',img:'https://i.pravatar.cc/150?img=12',sender:'João',text:'Ótimo! Confirmarei o dia antes de ir. 👍',time}],
-      'store':[{from:'store',sender:'Cali Colors',text:'Entendido! Posso te ajudar com mais alguma coisa? 😊',time}],
-      '3way-marcia':[{from:'marcia',img:'https://i.pravatar.cc/150?img=5',sender:'Márcia',text:'Que ótimo! Vou verificar minha agenda e retorno já.',time}],
-      'direct-pedro':[{from:'pedro',img:'https://i.pravatar.cc/150?img=7',sender:'Pedro',text:'Combinado! Até quinta então. 👋',time}],
-    };
-    const r=(replies[currentChat]||[])[0];
-    if(r){conv.messages.push(r);renderMessages(conv.messages);area.scrollTop=area.scrollHeight;}
-  },1200);
+  // Show immediately (optimistic)
+  appendMsg({ from:'me', text: txt, time });
+
+  // Save to Supabase
+  const sb = getSupabase();
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){
+    const { error } = await sb.from('messages').insert({
+      topic,
+      sender_id: session.user.id,
+      content: txt,
+      extension: 'queroumacor',
+      type: 'text'
+    });
+    if(error) console.error('sendMsg error:', error.message);
+  }
+}
+
+function appendMsg(m){
+  const area = document.getElementById('msgs-area');
+  const div = document.createElement('div');
+  if(m.from==='me'){
+    div.className='msg-row me';
+    div.innerHTML=`<div><div class="msg-bubble">${m.text}</div><div class="msg-time">${m.time}</div></div>`;
+  } else {
+    div.className='msg-row';
+    div.innerHTML=`<div class="msg-av"><img src="${m.img||''}" alt="${m.sender||''}"></div><div><div class="msg-sender">${m.sender||''}</div><div class="msg-bubble other">${m.text}</div><div class="msg-time">${m.time}</div></div>`;
+  }
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
 }
 
 function addStoreToChat(){
