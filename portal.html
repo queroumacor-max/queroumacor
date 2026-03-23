@@ -120,34 +120,51 @@ const Dashboard = () => (
   </div>
 );
 
-const PintoresList = () => (
-  <div style={{ background: C.white, borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-    <div style={{ fontWeight: 700, marginBottom: 16, color: C.ink }}>🖌️ Pintores — Aprovação Pendente</div>
-    {[
-      { name: 'Carlos Silva', city: 'São Paulo, SP', status: 'pendente', rating: 4.8 },
-      { name: 'Ana Rodrigues', city: 'Rio de Janeiro, RJ', status: 'aprovado', rating: 4.9 },
-      { name: 'Pedro Costa', city: 'Belo Horizonte, MG', status: 'pendente', rating: 4.7 },
-    ].map((p,i) => (
-      <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < 2 ? '1px solid ' + C.border : 'none' }}>
-        <div style={{ width:40, height:40, borderRadius:'50%', background:C.p2, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>{p.name[0]}</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontWeight:600 }}>{p.name}</div>
-          <div style={{ fontSize:12, color:C.muted }}>{p.city} · ⭐ {p.rating}</div>
+const PintoresList = () => {
+  const [pintores, setPintores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPintores = async () => {
+    const { data, error } = await window._sb.from('profiles').select('*').order('created_at', { ascending: false });
+    if (!error && data) setPintores(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchPintores(); }, []);
+
+  const updateVerified = async (id, verified) => {
+    await window._sb.from('profiles').update({ verified }).eq('id', id);
+    fetchPintores();
+  };
+
+  if (loading) return <div style={{ padding: 20, color: C.muted }}>Carregando pintores...</div>;
+
+  return (
+    <div style={{ background: C.white, borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+      <div style={{ fontWeight: 700, marginBottom: 16, color: C.ink }}>🖌️ Pintores — Aprovação Pendente</div>
+      {pintores.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>Nenhum pintor cadastrado.</div>}
+      {pintores.map((p, i) => (
+        <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < pintores.length - 1 ? '1px solid ' + C.border : 'none' }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:C.p2, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>{(p.name || '?')[0]}</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:600 }}>{p.name || 'Sem nome'}</div>
+            <div style={{ fontSize:12, color:C.muted }}>{[p.city, p.state].filter(Boolean).join(', ') || 'Sem localização'} · ⭐ {p.rating_avg != null ? Number(p.rating_avg).toFixed(1) : '—'}</div>
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {!p.verified ? (
+              <>
+                <button onClick={() => updateVerified(p.id, true)} style={{ background:C.p6, color:'#fff', border:'none', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12 }}>✓ Aprovar</button>
+                <button onClick={() => updateVerified(p.id, false)} style={{ background:C.p4, color:'#fff', border:'none', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12 }}>✗ Rejeitar</button>
+              </>
+            ) : (
+              <span style={{ background:C.p6+'22', color:C.p6, borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600 }}>✓ Aprovado</span>
+            )}
+          </div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          {p.status === 'pendente' ? (
-            <>
-              <button style={{ background:C.p6, color:'#fff', border:'none', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12 }}>✓ Aprovar</button>
-              <button style={{ background:C.p4, color:'#fff', border:'none', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12 }}>✗ Rejeitar</button>
-            </>
-          ) : (
-            <span style={{ background:C.p6+'22', color:C.p6, borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600 }}>✓ Aprovado</span>
-          )}
-        </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
 
 const ProdutosList = () => (
   <div>
@@ -290,39 +307,61 @@ const Chats = () => (
   </div>
 );
 
-const Orcamentos = () => (
-  <div style={{ background:C.white, borderRadius:16, padding:20, boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
-    <div style={{ fontWeight:700, marginBottom:16, color:C.ink }}>📋 Orçamentos</div>
-    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-      <thead>
-        <tr style={{ borderBottom:'2px solid '+C.border }}>
-          {['Cliente','Pintor','Serviço','Valor','Status','Data'].map(h => (
-            <th key={h} style={{ textAlign:'left', padding:'8px 12px', color:C.muted, fontWeight:600, fontSize:11, textTransform:'uppercase' }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {[
-          { cliente:'Ana Lima', pintor:'Carlos Silva', servico:'Sala+Quartos', valor:'R$ 2.400', status:'aceito', data:'22/03' },
-          { cliente:'Marcos Dias', pintor:'Pedro Costa', servico:'Fachada', valor:'R$ 4.800', status:'pendente', data:'21/03' },
-          { cliente:'Julia Santos', pintor:'Fernanda Rocha', servico:'Banheiros', valor:'R$ 890', status:'concluido', data:'20/03' },
-          { cliente:'Carla Mendes', pintor:'Roberto Lima', servico:'Apartamento', valor:'R$ 6.200', status:'pendente', data:'19/03' },
-        ].map((o,i) => (
-          <tr key={i} style={{ borderBottom:'1px solid '+C.border }}>
-            <td style={{ padding:'10px 12px' }}>{o.cliente}</td>
-            <td style={{ padding:'10px 12px' }}>{o.pintor}</td>
-            <td style={{ padding:'10px 12px', color:C.muted }}>{o.servico}</td>
-            <td style={{ padding:'10px 12px', fontWeight:700 }}>{o.valor}</td>
-            <td style={{ padding:'10px 12px' }}>
-              <span style={{ background:o.status==='aceito'?C.p6+'22':o.status==='pendente'?C.p7+'44':C.p3+'22', color:o.status==='aceito'?C.p6:o.status==='pendente'?'#b8860b':C.p3, borderRadius:8, padding:'3px 10px', fontSize:11 }}>{o.status}</span>
-            </td>
-            <td style={{ padding:'10px 12px', color:C.muted }}>{o.data}</td>
+const STATUS_MAP = { pending: 'pendente', accepted: 'aceito', completed: 'concluido', rejected: 'rejeitado' };
+
+const Orcamentos = () => {
+  const [orcamentos, setOrcamentos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await window._sb
+        .from('quotes')
+        .select('*, client:profiles!client_id(name), painter:profiles!painter_id(name)')
+        .order('created_at', { ascending: false });
+      if (!error && data) setOrcamentos(data);
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <div style={{ padding: 20, color: C.muted }}>Carregando orçamentos...</div>;
+
+  return (
+    <div style={{ background:C.white, borderRadius:16, padding:20, boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
+      <div style={{ fontWeight:700, marginBottom:16, color:C.ink }}>📋 Orçamentos</div>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+        <thead>
+          <tr style={{ borderBottom:'2px solid '+C.border }}>
+            {['Cliente','Pintor','Serviço','Valor','Status','Data'].map(h => (
+              <th key={h} style={{ textAlign:'left', padding:'8px 12px', color:C.muted, fontWeight:600, fontSize:11, textTransform:'uppercase' }}>{h}</th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        </thead>
+        <tbody>
+          {orcamentos.length === 0 && (
+            <tr><td colSpan={6} style={{ padding: '20px 12px', color: C.muted, textAlign: 'center' }}>Nenhum orçamento encontrado.</td></tr>
+          )}
+          {orcamentos.map((o, i) => {
+            const st = STATUS_MAP[o.status] || o.status;
+            const data = o.created_at ? new Date(o.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—';
+            return (
+              <tr key={o.id || i} style={{ borderBottom:'1px solid '+C.border }}>
+                <td style={{ padding:'10px 12px' }}>{o.client?.name || '—'}</td>
+                <td style={{ padding:'10px 12px' }}>{o.painter?.name || '—'}</td>
+                <td style={{ padding:'10px 12px', color:C.muted }}>{o.service_type || o.title || '—'}</td>
+                <td style={{ padding:'10px 12px', fontWeight:700 }}>{o.price != null ? 'R$ ' + Number(o.price).toLocaleString('pt-BR') : '—'}</td>
+                <td style={{ padding:'10px 12px' }}>
+                  <span style={{ background:st==='aceito'?C.p6+'22':st==='pendente'?C.p7+'44':st==='rejeitado'?C.p4+'22':C.p3+'22', color:st==='aceito'?C.p6:st==='pendente'?'#b8860b':st==='rejeitado'?C.p4:C.p3, borderRadius:8, padding:'3px 10px', fontSize:11 }}>{st}</span>
+                </td>
+                <td style={{ padding:'10px 12px', color:C.muted }}>{data}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const PAGES = [
   { id:'dashboard', icon:'📊', label:'Dashboard', section:'PRINCIPAL', component:<Dashboard /> },
