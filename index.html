@@ -695,6 +695,7 @@ window.addEventListener('DOMContentLoaded', () => { setTimeout(initAuth, 500); }
   <meta name="apple-mobile-web-app-title" content="QueroUmaCor">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -752,6 +753,7 @@ window.addEventListener('DOMContentLoaded', () => { setTimeout(initAuth, 500); }
         <span style="font-size:13px;color:var(--p1);font-weight:600;cursor:pointer;" onclick="toast('Email de recuperação enviado!')">Esqueceu a senha?</span>
       </div>
 
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAACuvRk1s3afKe8Wq" data-theme="light" style="margin-bottom:12px;display:flex;justify-content:center;"></div>
       <button class="auth-btn" onclick="doLogin()">Entrar</button>
 
       <div class="auth-divider">
