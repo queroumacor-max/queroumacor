@@ -3205,10 +3205,10 @@ function openChat(id) {
 
     // Load history
     const { data: msgs, error } = await sb.from('messages')
-      .select('id, sender_id, content, created_at, topic')
-      .eq('topic', topic)
+      .select('id, sender_id, content, created_at')
+      .eq('sender_id', session.user.id)
       .order('created_at', { ascending: true })
-      .limit(50);
+      .limit(20);
 
     if(!error && msgs && msgs.length > 0){
       const myId = session.user.id;
@@ -3229,29 +3229,23 @@ function openChat(id) {
       area.scrollTop=area.scrollHeight;
     }
 
-    // Subscribe Realtime
-    const sub = sb.channel(topic)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: 'topic=eq.' + topic
-      }, payload => {
-        const m = payload.new;
-        const { data:{ session: s } } = sb.auth.getSession().then(({data:{session:s}}) => {
-          const myId = s ? s.user.id : null;
-          const isMe = m.sender_id === myId;
+    // Subscribe Realtime via Broadcast (no DB filter required)
+    const sub = sb.channel('chat:' + currentChat)
+      .on('broadcast', { event: 'new_message' }, ({ payload: m }) => {
+        if(m.sender_id !== session.user.id){
           appendMsg({
-            from: isMe ? 'me' : 'other',
+            from: 'other',
             text: m.content,
-            time: new Date(m.created_at).getHours()+':'+(new Date(m.created_at).getMinutes()<10?'0':'')+ new Date(m.created_at).getMinutes(),
-            sender: isMe ? 'Você' : (conv.participants[0] ? conv.participants[0].name : 'Pintor'),
-            img: isMe ? '' : (conv.participants[0] ? conv.participants[0].img : '')
+            time: new Date().getHours()+':'+(new Date().getMinutes()<10?'0':'')+new Date().getMinutes(),
+            sender: conv.participants[0] ? conv.participants[0].name : 'Pintor',
+            img: conv.participants[0] ? conv.participants[0].img : ''
           });
-        });
+        }
       })
       .subscribe();
     window._chatSub = sub;
+    window._chatSession = session;
+    window._chatConv = conv;
   })();
 }
 
@@ -3327,7 +3321,6 @@ async function sendMsg(){
   const { data:{ session } } = await sb.auth.getSession();
   if(session){
     const { error } = await sb.from('messages').insert({
-      topic,
       sender_id: session.user.id,
       content: txt,
       type: 'text'
