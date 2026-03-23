@@ -688,6 +688,13 @@ async function doLogoutSupabase() {
 
 window.addEventListener('DOMContentLoaded', () => { setTimeout(initAuth, 500); });
 </script>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#ff6b35">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="QueroUmaCor">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 </head>
 
 <body>
@@ -3310,6 +3317,16 @@ const styleTag=document.createElement('style');
 styleTag.textContent='@keyframes typing{0%,80%,100%{transform:scale(0.6);opacity:.4;}40%{transform:scale(1);opacity:1;}}';
 document.head.appendChild(styleTag);
 
+</script>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(r => console.log('SW registered'))
+      .catch(e => console.log('SW error', e));
+  });
+}
 </script>
 </body>
 </html>
